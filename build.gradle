@@ -8,21 +8,29 @@ group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 sourceCompatibility = '17'
 
-
 repositories {
     mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.2"
+    }
 }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
-
-
     implementation 'com.h2database:h2'
 
+    // Feign dependencies
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // Jackson for JSON encoding/decoding
+    implementation 'io.github.openfeign:feign-jackson:12.3'
 
     // Spring Boot Starter Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -33,14 +41,3 @@ dependencies {
 test {
     useJUnitPlatform()
 }
-
-
-
-
-
-
-
-
-
-
-

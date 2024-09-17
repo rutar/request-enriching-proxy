@@ -5,13 +5,15 @@ import com.example.requestenrichingproxy.entity.AppUser;
 import com.example.requestenrichingproxy.entity.EnrichedDataForm;
 import com.example.requestenrichingproxy.entity.RequiredField;
 import com.example.requestenrichingproxy.entity.ServiceDefinition;
+import com.example.requestenrichingproxy.repository.EnrichedDataFormRepository;
 import com.example.requestenrichingproxy.repository.ServiceDefinitionRepository;
 import com.example.requestenrichingproxy.repository.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Field;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,11 +24,17 @@ public class RequestEnrichingService {
 
     private final ServiceDefinitionRepository serviceDefinitionRepository;
 
+    private DynamicFeignClientService dynamicFeignClientService;
+
+    private final EnrichedDataFormRepository enrichedDataFormRepository;
+
     private final JdbcTemplate jdbcTemplate;
 
-    public RequestEnrichingService(UserRepository userRepository, ServiceDefinitionRepository serviceDefinitionRepository, JdbcTemplate jdbcTemplate) {
+    public RequestEnrichingService(UserRepository userRepository, ServiceDefinitionRepository serviceDefinitionRepository, DynamicFeignClientService dynamicFeignClientService, EnrichedDataFormRepository enrichedDataFormRepository, JdbcTemplate jdbcTemplate) {
         this.userRepository = userRepository;
         this.serviceDefinitionRepository = serviceDefinitionRepository;
+        this.dynamicFeignClientService = dynamicFeignClientService;
+        this.enrichedDataFormRepository = enrichedDataFormRepository;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -109,6 +117,34 @@ public class RequestEnrichingService {
 
         return resultMap;
     }
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public String processFormSubmission(EnrichedDataForm formData) throws JsonProcessingException {
+
+        String serviceName = formData.getServiceName();
+
+        ServiceDefinition serviceDefinition = serviceDefinitionRepository.findByServiceName(serviceName);
+        if (serviceDefinition == null) {
+            throw new RuntimeException("Service not found: " + serviceName);
+        }
+
+        Set<String> requiredFields = serviceDefinition.getRequiredFields().stream()
+                .map(RequiredField::getFieldName)
+                .collect(Collectors.toSet());
+
+        if (!formData.getValues().keySet().containsAll(requiredFields)) {
+            throw new RuntimeException("Missing required fields for service: " + serviceName);
+        }
+
+        enrichedDataFormRepository.save(formData);
+
+        /* if calling real services uncomment and replace return value to 'response'
+         String response = dynamicFeignClientService.sendDynamicPostRequest(serviceDefinition.getServiceUrl(), formData);
+         System.out.println(response); */
+        return objectMapper.writeValueAsString(formData.getValues());
+    }
+
 
     private String toCamelCase(String input) {
         if (input == null || input.isEmpty()) {

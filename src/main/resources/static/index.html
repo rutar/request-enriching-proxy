@@ -70,12 +70,12 @@
 
 <form id="userForm">
     <div class="form-row">
-        <label for="firstName">First Name:</label>
-        <input type="text" id="firstName" name="firstName" required>
+        <label for="firstNameInput">First Name:</label>
+        <input type="text" id="firstNameInput" name="firstNameInput" required>
     </div>
     <div class="form-row">
-        <label for="lastName">Last Name:</label>
-        <input type="text" id="lastName" name="lastName" required>
+        <label for="lastNameInput">Last Name:</label>
+        <input type="text" id="lastNameInput" name="lastNameInput" required>
     </div>
     <div class="form-row">
         <label for="serviceSelect">Select Service:</label>
@@ -101,8 +101,8 @@
 <script>
     const API_BASE_URL = 'http://localhost:8080';
     const form = document.getElementById('userForm');
-    const firstNameInput = document.getElementById('firstName');
-    const lastNameInput = document.getElementById('lastName');
+    const firstNameInput = document.getElementById('firstNameInput');
+    const lastNameInput = document.getElementById('lastNameInput');
     const serviceSelect = document.getElementById('serviceSelect');
     const allFields = document.getElementById('allFields');
     const requiredFieldsSection = document.getElementById('requiredFieldsSection');
@@ -160,25 +160,21 @@
 
     function generateAllFields(presentations, values) {
         allFields.innerHTML = '';
-        const fields = ['firstName', 'lastName', ...Object.keys(presentations).filter(key => key !== 'firstName' && key !== 'lastName')];
+        const fields = Object.keys(presentations);
 
         fields.forEach(field => {
-            const label = field === 'firstName' ? 'First Name' :
-                field === 'lastName' ? 'Last Name' :
-                    presentations[field];
-            const value = field === 'firstName' ? firstNameInput.value :
-                field === 'lastName' ? lastNameInput.value :
-                    values[field] || '';
-            const isRequired = field === 'firstName' || field === 'lastName' || (presentations[field] && presentations[field].endsWith(':'));
+            const label = presentations[field];
+            const value = values[field] || '';
+            const isRequired = true;
 
             allFields.innerHTML += `
-                    <div class="form-row">
-                        <label for="${field}">${label}</label>
-                        <input type="text" id="${field}" name="${field}" value="${value}"
-                               ${isRequired ? 'required' : ''} ${field === 'firstName' || field === 'lastName' ? 'disabled' : ''}>
-                    </div>
-                    <div class="error" id="${field}-error"></div>
-                `;
+                <div class="form-row">
+                    <label for="${field}">${label}</label>
+                    <input type="text" id="${field}" name="${field}" value="${value}"
+                           ${isRequired ? 'required' : ''} >
+                </div>
+                <div class="error" id="${field}-error"></div>
+            `;
         });
         attachInputListeners();
     }
@@ -214,13 +210,44 @@
         if (!validateForm()) return;
 
         const formData = new FormData(form);
-        const userData = Object.fromEntries(formData.entries());
+
+
+// Convert FormData to an array and log all elements before iteration
+        const allEntries = Array.from(formData.entries());
+        console.log('All FormData entries:', allEntries);
+
+// Exclude firstName and lastName, include only generated required fields
+        const userData = Object.fromEntries(
+            allEntries.filter(([key, value]) => {
+                if (key === 'firstNameInput' || key === 'lastNameInput' || key === 'serviceSelect') {
+                    console.log(`Excluding field: ${key}, value: ${value}`);
+                    return false; // Exclude these fields
+                } else {
+                    console.log(`Including field: ${key}, value: ${value}`);
+                    return true; // Include other fields
+                }
+            })
+        );
+
+        console.log('Final filtered userData:', userData);
+
+        // Assuming presentations is globally accessible if needed or fetched again from backend
+        const presentations = Object.fromEntries(
+            Object.keys(userData).map(key => {
+                const labelElement = document.querySelector(`label[for=${key}]`);
+                if (labelElement) {
+                    return [key, labelElement.textContent];
+                } else {
+                    console.warn(`Label not found for key: ${key}`);
+                    return [key, 'Unknown label'];
+                }
+            })
+    );
 
         const requestData = {
             serviceName: serviceSelect.value,
-            formData: {
-                values: userData,
-            }
+            presentations: presentations,
+            values: userData
         };
 
         try {
