@@ -1,4 +1,4 @@
-package com.example.enrichedrequestproxy.entity;
+package com.example.requestenrichingproxy.entity;
 
 
 import jakarta.persistence.*;
@@ -7,6 +7,9 @@ import lombok.*;
 @Getter
 @Setter
 @Entity
+@Builder
+@RequiredArgsConstructor
+@AllArgsConstructor
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

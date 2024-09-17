@@ -1,12 +1,12 @@
-package com.example.enrichedrequestproxy;
+package com.example.requestenrichingproxy;
 
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class EnrichedRequestProxy {
+public class RequestEnrichingProxy {
     public static void main(String[] args) {
-        SpringApplication.run(EnrichedRequestProxy.class, args);
+        SpringApplication.run(RequestEnrichingProxy.class, args);
     }
 }
