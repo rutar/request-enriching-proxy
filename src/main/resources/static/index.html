@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Enriching Gateway Test UI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        #userForm, #response {
+            margin-top: 20px;
+        }
+        .form-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .form-row label {
+            flex: 0 0 200px;
+            text-align: right;
+            padding-right: 10px;
+        }
+        .form-row input, .form-row select {
+            flex: 1;
+            padding: 5px;
+        }
+        input[disabled], select[disabled] {
+            background-color: #f0f0f0;
+            color: #666;
+        }
+        button {
+            margin-top: 10px;
+            padding: 5px 10px;
+        }
+        .error {
+            color: red;
+            font-size: 0.9em;
+            margin-left: 200px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #requiredFieldsSection {
+            margin-top: 20px;
+            border-top: 2px solid #333;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<h1>API Gateway Test UI</h1>
+
+<form id="userForm">
+    <div class="form-row">
+        <label for="firstName">First Name:</label>
+        <input type="text" id="firstName" name="firstName" required>
+    </div>
+    <div class="form-row">
+        <label for="lastName">Last Name:</label>
+        <input type="text" id="lastName" name="lastName" required>
+    </div>
+    <div class="form-row">
+        <label for="serviceSelect">Select Service:</label>
+        <select id="serviceSelect" name="serviceSelect" disabled required>
+            <option value="">-- Select a service --</option>
+            <option value="service1">Service 1</option>
+            <option value="service2">Service 2</option>
+            <option value="service3">Service 3</option>
+        </select>
+    </div>
+    <div id="requiredFieldsSection" style="display: none;">
+        <h3>Required Fields:</h3>
+        <div id="allFields"></div>
+    </div>
+    <div class="form-row">
+        <label></label>
+        <button type="submit" id="callServiceBtn" disabled>Call Service</button>
+    </div>
+</form>
+
+<div id="response"></div>
+
+<script>
+    const API_BASE_URL = 'http://localhost:8080';
+    const form = document.getElementById('userForm');
+    const firstNameInput = document.getElementById('firstName');
+    const lastNameInput = document.getElementById('lastName');
+    const serviceSelect = document.getElementById('serviceSelect');
+    const allFields = document.getElementById('allFields');
+    const requiredFieldsSection = document.getElementById('requiredFieldsSection');
+    const callServiceBtn = document.getElementById('callServiceBtn');
+    const responseDiv = document.getElementById('response');
+
+    firstNameInput.addEventListener('input', checkNameInputs);
+    lastNameInput.addEventListener('input', checkNameInputs);
+    serviceSelect.addEventListener('change', getEnrichedFields);
+    form.addEventListener('submit', submitForm);
+
+    function checkNameInputs() {
+        if (firstNameInput.value.trim() && lastNameInput.value.trim()) {
+            serviceSelect.disabled = false;
+        } else {
+            serviceSelect.disabled = true;
+            serviceSelect.value = '';
+            requiredFieldsSection.style.display = 'none';
+            callServiceBtn.disabled = true;
+        }
+    }
+
+    async function getEnrichedFields() {
+        const service = serviceSelect.value;
+        if (!service) {
+            requiredFieldsSection.style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/enriched-fields`, {
+                params: {
+                    firstName: firstNameInput.value,
+                    lastName: lastNameInput.value,
+                    serviceName: service
+                }
+            });
+            const enrichedFields = response.data;
+
+            if (enrichedFields && enrichedFields.presentations) {
+                generateAllFields(enrichedFields.presentations, enrichedFields.values);
+                requiredFieldsSection.style.display = 'block';
+            } else {
+                allFields.innerHTML = 'No fields to display';
+                requiredFieldsSection.style.display = 'block';
+            }
+            validateForm();
+        } catch (error) {
+            console.error('Error fetching Enriched fields:', error);
+            allFields.innerHTML = 'Error fetching fields';
+            requiredFieldsSection.style.display = 'block';
+            callServiceBtn.disabled = true;
+        }
+    }
+
+    function generateAllFields(presentations, values) {
+        allFields.innerHTML = '';
+        const fields = ['firstName', 'lastName', ...Object.keys(presentations).filter(key => key !== 'firstName' && key !== 'lastName')];
+
+        fields.forEach(field => {
+            const label = field === 'firstName' ? 'First Name' :
+                field === 'lastName' ? 'Last Name' :
+                    presentations[field];
+            const value = field === 'firstName' ? firstNameInput.value :
+                field === 'lastName' ? lastNameInput.value :
+                    values[field] || '';
+            const isRequired = field === 'firstName' || field === 'lastName' || (presentations[field] && presentations[field].endsWith(':'));
+
+            allFields.innerHTML += `
+                    <div class="form-row">
+                        <label for="${field}">${label}</label>
+                        <input type="text" id="${field}" name="${field}" value="${value}"
+                               ${isRequired ? 'required' : ''} ${field === 'firstName' || field === 'lastName' ? 'disabled' : ''}>
+                    </div>
+                    <div class="error" id="${field}-error"></div>
+                `;
+        });
+        attachInputListeners();
+    }
+
+    function attachInputListeners() {
+        allFields.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', validateForm);
+        });
+    }
+
+    function validateForm() {
+        let isValid = true;
+        const inputs = form.querySelectorAll('input[required], select[required]');
+        inputs.forEach(input => {
+            const errorSpan = document.getElementById(`${input.id}-error`) || document.createElement('span');
+            errorSpan.id = `${input.id}-error`;
+            errorSpan.className = 'error';
+
+            if (!input.value.trim()) {
+                errorSpan.textContent = `${input.name} is required`;
+                input.parentNode.insertAdjacentElement('afterend', errorSpan);
+                isValid = false;
+            } else {
+                errorSpan.textContent = '';
+            }
+        });
+        callServiceBtn.disabled = !isValid;
+        return isValid;
+    }
+
+    async function submitForm(event) {
+        event.preventDefault();
+        if (!validateForm()) return;
+
+        const formData = new FormData(form);
+        const userData = Object.fromEntries(formData.entries());
+
+        const requestData = {
+            serviceName: serviceSelect.value,
+            formData: {
+                values: userData,
+            }
+        };
+
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/submit`, requestData);
+            displayResponse(response.data);
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            responseDiv.innerHTML = '<p>Error submitting form. Please try again.</p>';
+        }
+    }
+
+    function displayResponse(data) {
+        if (data && data.presentations && data.values) {
+            const tableRows = Object.keys(data.presentations).map(key => `
+                    <tr>
+                        <td>${data.presentations[key]}</td>
+                        <td>${data.values[key] || 'N/A'}</td>
+                    </tr>
+                `).join('');
+
+            responseDiv.innerHTML = `
+                    <h3>Response:</h3>
+                    <table>
+                        <tr>
+                            <th>Field</th>
+                            <th>Value</th>
+                        </tr>
+                        ${tableRows}
+                    </table>
+                `;
+        } else {
+            responseDiv.innerHTML = `
+                    <h3>Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+        }
+    }
+</script>
+</body>
+</html>

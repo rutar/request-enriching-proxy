@@ -31,7 +31,7 @@ public class RequestEnrichingService {
     }
 
 
-    public EnrichedDataForm getEnrichedFormFields(String firstName, String lastName, String serviceName) throws SQLException {
+    public EnrichedDataForm getEnrichedFormFields(String firstName, String lastName, String serviceName) {
 
         AppUser user = userRepository.findByFirstNameAndLastName(firstName, lastName)
                 .orElseThrow(() -> new RuntimeException("User not found: " + firstName + " " + lastName));
@@ -53,8 +53,8 @@ public class RequestEnrichingService {
             String fieldValue = userFields.getOrDefault(fieldName, null);
             String fieldPresentation = requiredField.getFieldPresentation();
 
-            formValues.put(fieldName, fieldValue);
-            formPresentations.put(fieldName, fieldPresentation);
+            formPresentations.put(fieldName, fieldValue);
+            formValues.put(fieldName, fieldPresentation);
         }
 
         return new EnrichedDataForm(formValues, formPresentations);
