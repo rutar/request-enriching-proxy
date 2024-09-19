@@ -29,21 +29,22 @@
             padding-right: 10px;
         }
         .form-row input, .form-row select {
-            flex: 1;
-            padding: 5px;
+            width: 200px;
+            padding:5px;
         }
         input[disabled], select[disabled] {
             background-color: #f0f0f0;
-            color: #666;
+            color: #777;
         }
         button {
             margin-top: 10px;
             padding: 5px 10px;
         }
         .error {
+            margin-bottom: 10px;
             color: red;
             font-size: 0.9em;
-            margin-left: 200px;
+            margin-left: 220px;
         }
         table {
             border-collapse: collapse;
@@ -116,13 +117,18 @@
 
     function checkNameInputs() {
         if (firstNameInput.value.trim() && lastNameInput.value.trim()) {
-            serviceSelect.disabled = false;
+            serviceSelect.disabled = false; // Enable service selection
         } else {
-            serviceSelect.disabled = true;
-            serviceSelect.value = '';
-            requiredFieldsSection.style.display = 'none';
-            callServiceBtn.disabled = true;
+            serviceSelect.disabled = true;  // Disable service selection
+            serviceSelect.value = '';       // Reset the service dropdown to its default state
+            requiredFieldsSection.style.display = 'none';  // Hide required fields section
+            callServiceBtn.disabled = true;  // Disable the "Call Service" button
         }
+
+        // Reset service dropdown (serviceSelect) if user modifies First Name or Last Name
+        serviceSelect.value = '';  // Reset dropdown to "Select Service"
+        requiredFieldsSection.style.display = 'none';  // Hide any previously displayed fields
+        callServiceBtn.disabled = true;  // Disable the call service button
     }
 
     async function getEnrichedFields() {
@@ -160,24 +166,44 @@
 
     function generateAllFields(presentations, values) {
         allFields.innerHTML = '';
+
         const fields = Object.keys(presentations);
 
+        // Create an array to store fields in order with firstName and lastName prioritized
+        const orderedFields = [];
+
+        // If "firstName" and "lastName" exist in the response, push them to the top
+        if (presentations.firstName) {
+            orderedFields.push('firstName');
+        }
+        if (presentations.lastName) {
+            orderedFields.push('lastName');
+        }
+
+        // Add the rest of the fields, excluding "firstNameInput" and "lastNameInput"
         fields.forEach(field => {
+            if (field !== 'firstName' && field !== 'lastName') {
+                orderedFields.push(field);
+            }
+        });
+
+        // Now iterate over the ordered fields and generate HTML
+        orderedFields.forEach(field => {
             const label = presentations[field];
             const value = values[field] || '';
-            const isRequired = true;
 
             allFields.innerHTML += `
-                <div class="form-row">
-                    <label for="${field}">${label}</label>
-                    <input type="text" id="${field}" name="${field}" value="${value}"
-                           ${isRequired ? 'required' : ''} >
-                </div>
-                <div class="error" id="${field}-error"></div>
-            `;
+            <div class="form-row">
+                <label for="${field}">${label}</label>
+                <input type="text" id="${field}" name="${field}" value="${value}" required >
+            </div>
+            <div class="error" id="${field}-error"></div>
+        `;
         });
+
         attachInputListeners();
     }
+
 
     function attachInputListeners() {
         allFields.querySelectorAll('input').forEach(input => {
@@ -280,7 +306,7 @@
                 `;
         } else {
             responseDiv.innerHTML = `
-                    <h3>Response:</h3>
+                    <h3>Last Response:</h3>
                     <pre>${JSON.stringify(data, null, 2)}</pre>
                 `;
         }

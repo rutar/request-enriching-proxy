@@ -37,15 +37,10 @@ public class EnrichedDataForm {
     private String serviceName;
 
 
-
     // Constructor for filling values and presentations
     public EnrichedDataForm(Map<String, String> formPresentations, Map<String, String> formValues) {
         this.values = formValues;
         this.presentations = formPresentations;
     }
 
-
-
-    public  EnrichedDataForm(Map<String, String> formData, String serviceUrl) {
-    }
 }

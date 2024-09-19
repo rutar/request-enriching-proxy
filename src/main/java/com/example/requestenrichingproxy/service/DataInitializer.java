@@ -92,12 +92,5 @@ public class DataInitializer {
                 .lastName("Doe")
                 .sex("Male")
                 .build());
-
-        userRepository.save(AppUser.builder()
-                .firstName("Jaana")
-                .lastName("Sepp")
-                .sex("Female")
-                .build());
-
     }
 }

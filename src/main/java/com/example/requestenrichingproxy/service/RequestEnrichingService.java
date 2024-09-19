@@ -9,12 +9,14 @@ import com.example.requestenrichingproxy.repository.EnrichedDataFormRepository;
 import com.example.requestenrichingproxy.repository.ServiceDefinitionRepository;
 import com.example.requestenrichingproxy.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.lang.reflect.Field;
-import java.util.*;
+import java.sql.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,18 +26,22 @@ public class RequestEnrichingService {
 
     private final ServiceDefinitionRepository serviceDefinitionRepository;
 
-    private DynamicFeignClientService dynamicFeignClientService;
+    private final DynamicFeignClientService dynamicFeignClientService;
 
     private final EnrichedDataFormRepository enrichedDataFormRepository;
 
-    private final JdbcTemplate jdbcTemplate;
+    @Value("${spring.datasource.url}")
+    private String jdbcUrl;
+    @Value("${spring.datasource.username}")
+    private String username;
+    @Value("${spring.datasource.password}")
+    private String password;
 
-    public RequestEnrichingService(UserRepository userRepository, ServiceDefinitionRepository serviceDefinitionRepository, DynamicFeignClientService dynamicFeignClientService, EnrichedDataFormRepository enrichedDataFormRepository, JdbcTemplate jdbcTemplate) {
+    public RequestEnrichingService(UserRepository userRepository, ServiceDefinitionRepository serviceDefinitionRepository, DynamicFeignClientService dynamicFeignClientService, EnrichedDataFormRepository enrichedDataFormRepository) {
         this.userRepository = userRepository;
         this.serviceDefinitionRepository = serviceDefinitionRepository;
         this.dynamicFeignClientService = dynamicFeignClientService;
         this.enrichedDataFormRepository = enrichedDataFormRepository;
-        this.jdbcTemplate = jdbcTemplate;
     }
 
 
@@ -68,57 +74,64 @@ public class RequestEnrichingService {
         return new EnrichedDataForm(formValues, formPresentations);
     }
 
-    // Get user fields from AppUser entity using reflection
-    private Map<String, String> getUserFields(AppUser user) {
-        return Arrays.stream(user.getClass().getDeclaredFields())
-                .collect(Collectors.toMap(
-                        Field::getName,
-                        field -> {
-                            field.setAccessible(true);
-                            try {
-                                Object value = field.get(user);
-                                return value != null ? value.toString() : "";
-                            } catch (IllegalAccessException e) {
-                                e.printStackTrace();
-                                return "";
+
+    public Map<String, String> getUserFieldsFromDatabase(AppUser user) {
+        Map<String, String> fieldValues = new HashMap<>();
+
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {
+
+            String className = toSnakeCase(AppUser.class.getSimpleName());
+
+            // Query to get the table name
+            String sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE UPPER(TABLE_NAME) LIKE UPPER(?) LIMIT 1";
+
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, "%" + className + "%");
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        String tableName = rs.getString("TABLE_NAME");
+
+                        // Use DatabaseMetaData to retrieve column names
+                        DatabaseMetaData metaData = connection.getMetaData();
+                        try (ResultSet columns = metaData.getColumns(null, null, tableName, null)) {
+                            StringBuilder queryBuilder = new StringBuilder("SELECT ");
+                            boolean first = true;
+                            while (columns.next()) {
+                                String columnName = columns.getString("COLUMN_NAME");
+                                if (!first) {
+                                    queryBuilder.append(", ");
+                                }
+                                queryBuilder.append(columnName);
+                                first = false;
+                            }
+                            queryBuilder.append(" FROM ").append(tableName).append(" WHERE id = ?");
+
+                            // Execute the query to get the user field values
+                            try (PreparedStatement userStmt = connection.prepareStatement(queryBuilder.toString())) {
+                                userStmt.setLong(1, user.getId());
+                                try (ResultSet userRs = userStmt.executeQuery()) {
+                                    if (userRs.next()) {
+                                        ResultSetMetaData rsMetaData = userRs.getMetaData();
+                                        int columnCount = rsMetaData.getColumnCount();
+                                        for (int i = 1; i <= columnCount; i++) {
+                                            String columnName = rsMetaData.getColumnName(i);
+                                            String columnValue = userRs.getString(i);
+                                            fieldValues.put(toCamelCase(columnName), columnValue);
+                                        }
+                                    }
+                                }
                             }
                         }
-                ));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return fieldValues;
     }
 
-    // Get user fields from database
-    public Map<String, String> getUserFieldsFromDatabase(AppUser user) {
-        List<String> fields = new ArrayList<>();
-
-        String sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE UPPER(TABLE_NAME) LIKE UPPER(?) LIMIT 1";
-
-        String appUserTableName = jdbcTemplate.queryForObject(sql, new Object[]{"%app_user%"}, String.class);
-
-        // Query to get column names
-        sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '" + appUserTableName + "'";
-        jdbcTemplate.query(sql, rs -> {
-            while (rs.next()) {
-                String columnName = rs.getString("COLUMN_NAME");
-                fields.add(columnName); // Initialize with null values
-            }
-        });
-
-        // Fetch the specific user entity
-        sql = "SELECT * FROM " + appUserTableName + " WHERE id = ?";
-
-        Map<String, String> resultMap = new HashMap<>();
-
-        jdbcTemplate.query(sql, new Object[]{user.getId()}, rs -> {
-            for (String columnName : fields) {
-                String columnValue = rs.getString(columnName);
-                resultMap.put(toCamelCase(columnName), columnValue);
-            }
-        });
-
-        return resultMap;
-    }
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public String processFormSubmission(EnrichedDataForm formData) throws JsonProcessingException {
 
@@ -139,34 +152,26 @@ public class RequestEnrichingService {
 
         enrichedDataFormRepository.save(formData);
 
-        /* if calling real services uncomment and replace return value to 'response'
-         String response = dynamicFeignClientService.sendDynamicPostRequest(serviceDefinition.getServiceUrl(), formData);
-         System.out.println(response); */
-        return objectMapper.writeValueAsString(formData.getValues());
+
+        String response = dynamicFeignClientService.sendDynamicPostRequest(serviceDefinition.getServiceUrl(), formData);
+        System.out.println(response);
+        return response;
     }
 
 
-    private String toCamelCase(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
+    // Utility function to convert snake_case to camelCase
+    private String toCamelCase(String snakeCase) {
+        String[] parts = snakeCase.toLowerCase().split("_");
+        StringBuilder camelCaseString = new StringBuilder(parts[0]);
+        for (int i = 1; i < parts.length; i++) {
+            camelCaseString.append(parts[i].substring(0, 1).toUpperCase())
+                    .append(parts[i].substring(1));
         }
-
-        StringBuilder camelCaseString = new StringBuilder();
-        boolean nextUpperCase = false;
-
-        for (char c : input.toCharArray()) {
-            if (c == '_') {
-                nextUpperCase = true;
-            } else {
-                if (nextUpperCase) {
-                    camelCaseString.append(Character.toUpperCase(c));
-                    nextUpperCase = false;
-                } else {
-                    camelCaseString.append(Character.toLowerCase(c));
-                }
-            }
-        }
-
         return camelCaseString.toString();
+    }
+
+    // Utility function to convert CamelCase to snake_case
+    private String toSnakeCase(String className) {
+        return className.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 }
