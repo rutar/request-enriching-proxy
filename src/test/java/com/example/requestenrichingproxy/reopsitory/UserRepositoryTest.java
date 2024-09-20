@@ -26,8 +26,6 @@ public class UserRepositoryTest {
         AppUser user = AppUser.builder()
                 .firstName("Jane")
                 .lastName("Smith")
-                .birthPlace("USA, Ohio")
-                .sex("Female")
                 .build();
         user = userRepository.save(user);
 
@@ -46,8 +44,6 @@ public class UserRepositoryTest {
         AppUser user = AppUser.builder()
                 .firstName("John")
                 .lastName("Doe")
-                .birthPlace("USA, Ohio")
-                .sex("Male")
                 .build();
         userRepository.save(user);
 

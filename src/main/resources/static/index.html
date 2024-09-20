@@ -12,53 +12,65 @@
             margin: 0 auto;
             padding: 20px;
         }
+
         h1, h2, h3 {
             color: #333;
         }
+
         #userForm, #response {
             margin-top: 20px;
         }
+
         .form-row {
             display: flex;
             align-items: center;
             margin-bottom: 10px;
         }
+
         .form-row label {
             flex: 0 0 200px;
             text-align: right;
             padding-right: 10px;
         }
+
         .form-row input, .form-row select {
             width: 200px;
-            padding:5px;
+            padding: 5px;
         }
+
         input[disabled], select[disabled] {
             background-color: #f0f0f0;
             color: #777;
         }
+
         button {
             margin-top: 10px;
             padding: 5px 10px;
         }
+
         .error {
             margin-bottom: 10px;
             color: red;
             font-size: 0.9em;
             margin-left: 220px;
         }
+
         table {
             border-collapse: collapse;
             width: 100%;
             margin-top: 20px;
         }
+
         th, td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
         }
+
         th {
             background-color: #f2f2f2;
         }
+
         #requiredFieldsSection {
             margin-top: 20px;
             border-top: 2px solid #333;
@@ -148,8 +160,8 @@
             });
             const enrichedFields = response.data;
 
-            if (enrichedFields && enrichedFields.presentations) {
-                generateAllFields(enrichedFields.presentations, enrichedFields.values);
+            if (enrichedFields && Object.keys(enrichedFields).length > 0) {
+                generateAllFields(enrichedFields);
                 requiredFieldsSection.style.display = 'block';
             } else {
                 allFields.innerHTML = 'No fields to display';
@@ -164,24 +176,22 @@
         }
     }
 
-    function generateAllFields(presentations, values) {
+    function generateAllFields(fields) {
         allFields.innerHTML = '';
-
-        const fields = Object.keys(presentations);
 
         // Create an array to store fields in order with firstName and lastName prioritized
         const orderedFields = [];
 
         // If "firstName" and "lastName" exist in the response, push them to the top
-        if (presentations.firstName) {
+        if ('firstName' in fields) {
             orderedFields.push('firstName');
         }
-        if (presentations.lastName) {
+        if ('lastName' in fields) {
             orderedFields.push('lastName');
         }
 
-        // Add the rest of the fields, excluding "firstNameInput" and "lastNameInput"
-        fields.forEach(field => {
+        // Add the rest of the fields, excluding "firstName" and "lastName"
+        Object.keys(fields).forEach(field => {
             if (field !== 'firstName' && field !== 'lastName') {
                 orderedFields.push(field);
             }
@@ -189,19 +199,27 @@
 
         // Now iterate over the ordered fields and generate HTML
         orderedFields.forEach(field => {
-            const label = presentations[field];
-            const value = values[field] || '';
+            const label = transformFieldNameToLabel(field);
+            const value = fields[field] || '';
 
             allFields.innerHTML += `
-            <div class="form-row">
-                <label for="${field}">${label}</label>
-                <input type="text" id="${field}" name="${field}" value="${value}" required >
-            </div>
-            <div class="error" id="${field}-error"></div>
-        `;
+        <div class="form-row">
+            <label for="${field}">${label}:</label>
+            <input type="text" id="${field}" name="${field}" value="${value}" required>
+        </div>
+        <div class="error" id="${field}-error"></div>
+    `;
         });
 
         attachInputListeners();
+    }
+
+    function transformFieldNameToLabel(fieldName) {
+        // Split the camelCase field name into words
+        const words = fieldName.split(/(?=[A-Z])/).map(word => word.toLowerCase());
+
+        // Capitalize the first letter of each word and join them
+        return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     }
 
 
@@ -237,47 +255,21 @@
 
         const formData = new FormData(form);
 
-
-// Convert FormData to an array and log all elements before iteration
-        const allEntries = Array.from(formData.entries());
-        console.log('All FormData entries:', allEntries);
-
-// Exclude firstName and lastName, include only generated required fields
-        const userData = Object.fromEntries(
-            allEntries.filter(([key, value]) => {
-                if (key === 'firstNameInput' || key === 'lastNameInput' || key === 'serviceSelect') {
-                    console.log(`Excluding field: ${key}, value: ${value}`);
-                    return false; // Exclude these fields
-                } else {
-                    console.log(`Including field: ${key}, value: ${value}`);
-                    return true; // Include other fields
-                }
-            })
+        // Convert FormData to an object, excluding specific fielda
+        const dataForm = Object.fromEntries(
+            Array.from(formData.entries()).filter(([key]) =>
+                !['serviceSelect', 'firstNameInput', 'lastNameInput'].includes(key)
+            )
         );
 
-        console.log('Final filtered userData:', userData);
-
-        // Assuming presentations is globally accessible if needed or fetched again from backend
-        const presentations = Object.fromEntries(
-            Object.keys(userData).map(key => {
-                const labelElement = document.querySelector(`label[for=${key}]`);
-                if (labelElement) {
-                    return [key, labelElement.textContent];
-                } else {
-                    console.warn(`Label not found for key: ${key}`);
-                    return [key, 'Unknown label'];
-                }
-            })
-    );
-
-        const requestData = {
-            serviceName: serviceSelect.value,
-            presentations: presentations,
-            values: userData
-        };
+        // Get the service name
+        const serviceName = serviceSelect.value;
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/submit`, requestData);
+            const response = await axios.post(`${API_BASE_URL}/api/submit`, dataForm, {
+                params: {serviceName: serviceName},
+                headers: {'Content-Type': 'application/json'}
+            });
             displayResponse(response.data);
         } catch (error) {
             console.error('Error submitting form:', error);
@@ -286,29 +278,38 @@
     }
 
     function displayResponse(data) {
-        if (data && data.presentations && data.values) {
-            const tableRows = Object.keys(data.presentations).map(key => `
-                    <tr>
-                        <td>${data.presentations[key]}</td>
-                        <td>${data.values[key] || 'N/A'}</td>
-                    </tr>
-                `).join('');
+        if (data && data.serviceUrl && data.response) {
+            let responseObj;
+            try {
+                responseObj = JSON.parse(data.response);
+            } catch (e) {
+                console.error('Error parsing response:', e);
+                responseObj = {'Raw Response': data.response};
+            }
+
+            const tableRows = Object.entries(responseObj).map(([key, value]) => `
+            <tr>
+                <td>${transformFieldNameToLabel(key)}</td>
+                <td>${value !== null && value !== undefined ? value : 'N/A'}</td>
+            </tr>
+        `).join('');
 
             responseDiv.innerHTML = `
-                    <h3>Response:</h3>
-                    <table>
-                        <tr>
-                            <th>Field</th>
-                            <th>Value</th>
-                        </tr>
-                        ${tableRows}
-                    </table>
-                `;
+            <h3>Service Response:</h3>
+            <p><strong>Service URL:</strong> ${data.serviceUrl}</p>
+            <table>
+                <tr>
+                    <th>Field</th>
+                    <th>Value</th>
+                </tr>
+                ${tableRows}
+            </table>
+        `;
         } else {
             responseDiv.innerHTML = `
-                    <h3>Last Response:</h3>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                `;
+            <h3>Response:</h3>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        `;
         }
     }
 </script>

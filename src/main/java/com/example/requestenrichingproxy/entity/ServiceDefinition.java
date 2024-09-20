@@ -4,8 +4,6 @@ package com.example.requestenrichingproxy.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.Set;
-
 @Getter
 @Setter
 @RequiredArgsConstructor
@@ -20,12 +18,6 @@ public class ServiceDefinition {
     private String serviceName;
     private String serviceUrl;
 
-    @ManyToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "service_definition_required_field",
-            joinColumns = @JoinColumn(name = "service_definition_id"),
-            inverseJoinColumns = @JoinColumn(name = "required_field_id")
-    )
-    private Set<RequiredField> requiredFields;
-
+    @Column(columnDefinition = "TEXT")
+    private String requiredFields;
 }

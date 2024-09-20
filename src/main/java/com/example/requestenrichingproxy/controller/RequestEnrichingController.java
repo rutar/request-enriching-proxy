@@ -1,12 +1,10 @@
 package com.example.requestenrichingproxy.controller;
 
-import com.example.requestenrichingproxy.entity.EnrichedDataForm;
 import com.example.requestenrichingproxy.service.RequestEnrichingService;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.sql.SQLException;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -20,18 +18,17 @@ public class RequestEnrichingController {
 
 
     @GetMapping("/enriched-fields")
-    public ResponseEntity<EnrichedDataForm> getFormFields(
+    public ResponseEntity<Map<String, String>> getFormFields(
             @RequestParam String firstName,
             @RequestParam String lastName,
-            @RequestParam String serviceName) throws SQLException {
-        EnrichedDataForm response = requestEnrichingService.getEnrichedFormFields(firstName, lastName, serviceName);
+            @RequestParam String serviceName) {
+        Map<String, String> response = requestEnrichingService.getEnrichedFormFields(firstName, lastName, serviceName);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/submit")
-    public ResponseEntity<String> submitForm(@RequestBody EnrichedDataForm dataForm) throws JsonProcessingException {
-
-        String result = requestEnrichingService.processFormSubmission(dataForm);
+    public ResponseEntity<Map<String, String>> submitForm(@RequestParam String serviceName, @RequestBody Map<String, String> dataForm) {
+        Map<String, String> result = requestEnrichingService.processFormSubmission(serviceName, dataForm);
         return ResponseEntity.ok(result);
     }
 
