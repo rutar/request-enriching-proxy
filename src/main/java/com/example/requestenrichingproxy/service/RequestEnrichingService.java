@@ -9,6 +9,7 @@ import com.example.requestenrichingproxy.repository.ServiceResponseRepository;
 import com.example.requestenrichingproxy.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -25,9 +26,9 @@ public class RequestEnrichingService {
 
     private final ServiceResponseRepository serviceResponseRepository;
 
+    @Autowired
     public RequestEnrichingService(UserRepository userRepository,
-                                   ServiceDefinitionRepository serviceDefinitionRepository,
-                                   DynamicFeignClientService dynamicFeignClientService,
+                                   ServiceDefinitionRepository serviceDefinitionRepository, DynamicFeignClientService dynamicFeignClientService,
                                    ServiceResponseRepository serviceResponseRepository) {
         this.userRepository = userRepository;
         this.serviceDefinitionRepository = serviceDefinitionRepository;
@@ -82,7 +83,11 @@ public class RequestEnrichingService {
             throw new RuntimeException("Missing required fields for service: " + serviceName);
         }
 
-        Map<String, String> response = dynamicFeignClientService.sendDynamicPostRequest(serviceDefinition.getServiceUrl(), userFormData);
+
+        Map<String, String> additionalHeaders = new HashMap<>();
+        additionalHeaders.put("X-Custom-Header", "CustomValue");
+
+        Map<String, String> response = dynamicFeignClientService.sendDynamicPostRequest(serviceDefinition.getServiceUrl(), userFormData, additionalHeaders);
 
         String responseJson;
         try {
@@ -93,10 +98,9 @@ public class RequestEnrichingService {
             responseJson = "Error converting response to JSON";
         }
 
+
         // Create and save new ServiceResponse entity
         serviceResponseRepository.save(new ServiceResponse(serviceDefinition.getServiceUrl(), responseJson));
-
-        System.out.println(response);
         return response;
     }
 }

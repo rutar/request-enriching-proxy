@@ -34,13 +34,13 @@ public class DataInitializer {
 
         ServiceDefinition service2 = ServiceDefinition.builder()
                 .serviceName("service2")
-                .serviceUrl("http://example.com/service2")
+                .serviceUrl("http://anotherdomain.com/service2")
                 .requiredFields("firstName, lastName, sex, currentAddress")
                 .build();
 
         ServiceDefinition service3 = ServiceDefinition.builder()
                 .serviceName("service3")
-                .serviceUrl("http://example.com/service3")
+                .serviceUrl("https://secureddomain.com/service3")
                 .requiredFields("lastName, birthDate, currentAddress, birthPlace, sex")
                 .build();
 
